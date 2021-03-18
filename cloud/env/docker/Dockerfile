@@ -1,27 +1,35 @@
 FROM centos:7
 RUN yum -y update
+ARG deploy_home=/env/app
+ARG cmake_version="3.19.7"
+ARG zfp_version="0.5.5"
+ARG rocksdb_version="v6.2.2"
+ARG go_version="1.12.7"
+ARG cmake_linux_x86="cmake-${cmake_version}-Linux-x86_64"
+ARG cmake_linux_tar_file="${cmake_linux_x86}.tar.gz"
+
 RUN yum install -y epel-release wget gcc gcc-c++ make automake git blas-devel lapack-devel which openssl-devel libzstd-devel openblas-devel &&\
-    mkdir -p /env/app &&\
-    cd /env/app/ &&\
-    wget https://cmake.org/files/v3.20/cmake-3.20.0-rc3.tar.gz &&\
-    tar xf cmake-3.20.0-rc3.tar.gz &&\
-    cd /env/app/cmake-3.20.0-rc3 &&\
-    ./bootstrap &&\
-    gmake &&\
-    gmake install &&\
-    cd /usr/bin &&\
-    ln -s cmake3 cmake &&\
-    cd /env/app &&\
-    wget https://github.com/facebook/rocksdb/archive/v6.2.2.tar.gz -O rocksdb-v6.2.2.tar.gz &&\
-    tar -xzf rocksdb-v6.2.2.tar.gz &&\
-    cd /env/app/rocksdb-6.2.2 &&\
-    make shared_lib &&\
-    mkdir -p /env/app/rocksdb_install/lib &&\
-    cp librocksdb.so.6.2.2 /env/app/rocksdb_install/lib &&\
-    cd /env/app/rocksdb_install/lib &&\
-    ln -s librocksdb.so.6.2.2 librocksdb.so.6.2 &&\
-    ln -s librocksdb.so.6.2 librocksdb.so &&\
-    cp -r /env/app/rocksdb-6.2.2/include /env/app/rocksdb_install/ &&\
-    cd /env/app/ &&\
-    wget https://dl.google.com/go/go1.12.7.linux-amd64.tar.gz &&\
-    tar -xzf go1.12.7.linux-amd64.tar.gz
+    mkdir -p $deploy_home &&\
+    cd $deploy_home &&\
+    wget https://github.com/Kitware/CMake/releases/download/v${cmake_version}/${cmake_linux_tar_file} &&\
+    tar xf $cmake_linux_tar_file -C $deploy_home &&\
+    add_sys_path="export PATH=$deploy_home/${cmake_linux_x86}/bin:$PATH" &&\
+    $add_sys_path &&\
+    export_cmake_root="export CMAKE_ROOT=$deploy_home/${cmake_linux_x86}" &&\
+    echo -e "$make_path\n$export_cmake_root\n" >> "/root/.bashrc" &&\
+    wget https://github.com/LLNL/zfp/archive/${zfp_version}.tar.gz -O zfp.tar.gz &&\
+    tar -xzvf zfp.tar.gz &&\
+    cd $deploy_home/zfp-${zfp_version} &&\
+    mkdir build && cd build &&\
+    cmake -DCMAKE_INSTALL_PREFIX=$deploy_home/zfp_install .. &&\
+    cmake --build --config Release . &&\
+    make install &&\
+    cd $deploy_home &&\
+    wget https://github.com/facebook/rocksdb/archive/${rocksdb_version}.tar.gz -O rocksdb-${rocksdb_version}.tar.gz &&\
+    tar -xzf rocksdb-${rocksdb_version}.tar.gz &&\
+    cd $deploy_home/rocksdb-${rocksdb_version} &&\
+    make shared_lib -j30 &&\
+    make install-shared INSTALL_PATH=$deploy_home/rocksdb_install &&\
+    cd $deploy_home &&\
+    wget https://dl.google.com/go/go${go_version}.linux-amd64.tar.gz &&\
+    tar -xzf go${go_version}.linux-amd64.tar.gz
